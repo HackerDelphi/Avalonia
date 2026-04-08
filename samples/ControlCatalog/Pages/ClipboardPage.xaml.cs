@@ -3,41 +3,43 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Documents;
 using Avalonia.Controls.Notifications;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 
 namespace ControlCatalog.Pages
 {
-    public partial class ClipboardPage : UserControl
+    public partial class ClipboardPage : ContentPage
     {
         private readonly DataFormat<byte[]> _customBinaryDataFormat =
             DataFormat.CreateBytesApplicationFormat("controlcatalog-binary-data");
 
         private INotificationManager? _notificationManager;
-        private INotificationManager NotificationManager => _notificationManager
-            ??= new WindowNotificationManager(TopLevel.GetTopLevel(this)!);
 
         private readonly DispatcherTimer _clipboardLastDataObjectChecker;
         private DataTransfer? _storedDataTransfer;
+
+        private bool _checkingClipboardDataTransfer;
+        private Bitmap _defaultImage;
+
         public ClipboardPage()
         {
-            _clipboardLastDataObjectChecker =
-                new DispatcherTimer(TimeSpan.FromSeconds(0.5), default, CheckLastDataObject);
             InitializeComponent();
-        }
+            _clipboardLastDataObjectChecker =
+                new DispatcherTimer(TimeSpan.FromSeconds(0.5), default, CheckLastDataObject)
+                {
+                    IsEnabled = false
+                };
 
-        private TextBox ClipboardContent => this.Get<TextBox>("ClipboardContent");
-
-        private void InitializeComponent()
-        {
-            AvaloniaXamlLoader.Load(this);
+            using var asset = AssetLoader.Open(new Uri("avares://ControlCatalog/Assets/image1.jpg"));
+            _defaultImage = new Bitmap(asset);
+            ClipboardImage.Source = _defaultImage;
         }
 
         private async void CopyText(object? sender, RoutedEventArgs args)
@@ -46,11 +48,31 @@ namespace ControlCatalog.Pages
                 await clipboard.SetTextAsync(ClipboardContent.Text ?? string.Empty);
         }
 
+        private async void CopyImage(object? sender, RoutedEventArgs args)
+        {
+            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+                await clipboard.SetValueAsync(DataFormat.Bitmap, _defaultImage);
+        }
+
         private async void PasteText(object? sender, RoutedEventArgs args)
         {
             if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
             {
                 ClipboardContent.Text = await clipboard.TryGetTextAsync();
+            }
+        }
+
+        private async void PasteImage(object? sender, RoutedEventArgs args)
+        {
+            if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+            {
+                using var data = await clipboard.TryGetDataAsync();
+                Bitmap? source = null;
+                if (data != null)
+                {
+                    source = await data!.TryGetValueAsync(DataFormat.Bitmap);
+                }
+                ClipboardImage.Source = source;
             }
         }
 
@@ -83,7 +105,7 @@ namespace ControlCatalog.Pages
 
                 if (invalidFile.Count > 0)
                 {
-                    NotificationManager.Show(new Notification("Warning", "There is one o more invalid path.", NotificationType.Warning));
+                    _notificationManager?.Show(new Notification("Warning", "There is one o more invalid path.", NotificationType.Warning));
                 }
 
                 if (files.Count > 0)
@@ -92,11 +114,11 @@ namespace ControlCatalog.Pages
                     foreach (var file in files)
                         dataTransfer.Add(DataTransferItem.Create(DataFormat.File, file));
                     await clipboard.SetDataAsync(dataTransfer);
-                    NotificationManager.Show(new Notification("Success", "Copy completed.", NotificationType.Success));
+                    _notificationManager?.Show(new Notification("Success", "Copy completed.", NotificationType.Success));
                 }
                 else
                 {
-                    NotificationManager.Show(new Notification("Warning", "Any files to copy in Clipboard.", NotificationType.Warning));
+                    _notificationManager?.Show(new Notification("Warning", "Any files to copy in Clipboard.", NotificationType.Warning));
                 }
             }
         }
@@ -155,6 +177,7 @@ namespace ControlCatalog.Pages
         {
             _clipboardLastDataObjectChecker.Start();
             base.OnAttachedToVisualTree(e);
+            _notificationManager = new WindowNotificationManager(TopLevel.GetTopLevel(this)!);
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -163,11 +186,9 @@ namespace ControlCatalog.Pages
             base.OnDetachedFromVisualTree(e);
         }
 
-        private Run OwnsClipboardDataObject => this.Get<Run>("OwnsClipboardDataObject");
-        private bool _checkingClipboardDataTransfer;
         private async void CheckLastDataObject(object? sender, EventArgs e)
         {
-            if(_checkingClipboardDataTransfer)
+            if (_checkingClipboardDataTransfer)
                 return;
             try
             {

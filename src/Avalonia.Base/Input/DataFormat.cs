@@ -1,4 +1,5 @@
 ﻿using System;
+using Avalonia.Media.Imaging;
 using Avalonia.Metadata;
 using Avalonia.Platform.Storage;
 using Avalonia.Utilities;
@@ -31,6 +32,12 @@ public abstract class DataFormat : IEquatable<DataFormat>
     /// Its data type is <see cref="string"/>.
     /// </summary>
     public static DataFormat<string> Text { get; } = CreateUniversalFormat<string>("Text");
+
+    /// <summary>
+    /// Gets a data format representing a bitmap.
+    /// Its data type is <see cref="Media.Imaging.Bitmap"/>.
+    /// </summary>
+    public static DataFormat<Bitmap> Bitmap { get; } = CreateUniversalFormat<Bitmap>("Bitmap");
 
     /// <summary>
     /// Gets a data format representing a single file.
@@ -206,19 +213,7 @@ public abstract class DataFormat : IEquatable<DataFormat>
         return true;
 
         static bool IsValidChar(char c)
-            => IsAsciiLetterOrDigit(c) || c == '.' || c == '-';
-
-        static bool IsAsciiLetterOrDigit(char c)
-        {
-#if NET8_0_OR_GREATER
-            return char.IsAsciiLetterOrDigit(c);
-#else
-            return c is
-                (>= '0' and <= '9') or
-                (>= 'A' and <= 'Z') or
-                (>= 'a' and <= 'z');
-#endif
-        }
+            => char.IsAsciiLetterOrDigit(c) || c == '.' || c == '-';
     }
 
     /// <inheritdoc />
